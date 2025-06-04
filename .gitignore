@@ -1,0 +1,65 @@
+# 依赖目录
+node_modules/
+
+# 编译输出
+out/
+dist/
+
+# 插件包文件
+*.vsix
+
+# VSCode 测试相关
+.vscode-test/
+.vscode/.ropeproject/
+
+# 示例和测试数据
+example/
+test/workspace/
+app/iframe/locale/
+
+# 日志文件
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.pnpm-debug.log*
+
+# 测试覆盖率目录
+coverage/
+.nyc_output/
+
+# IDE 相关
+.idea/
+.project
+.classpath
+.c9/
+*.launch
+*.sublime-workspace
+
+# 调试相关
+.DS_Store
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# TypeScript 缓存
+*.tsbuildinfo
+
+# 可选 - 一些项目可能需要将这些文件加入版本控制
+# package-lock.json
+# yarn.lock
+
+# 临时文件
+tmp/
+temp/
+
+# 系统文件
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.directory 

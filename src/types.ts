@@ -1,0 +1,1 @@
+export type I18nMap = Record<string, string>; 

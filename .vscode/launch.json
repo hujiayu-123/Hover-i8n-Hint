@@ -1,0 +1,69 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "启动扩展(默认)",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/out/**/*.js"
+      ],
+      "preLaunchTask": "${defaultBuildTask}"
+    },
+    {
+      "name": "启动扩展(打开任意文件夹)",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}",
+        "${input:anyFolderPath}"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/out/**/*.js"
+      ],
+      "preLaunchTask": "${defaultBuildTask}"
+    },
+    {
+      "name": "启动扩展(打开任意文件)",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}",
+        "${input:anyFilePath}"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/out/**/*.js"
+      ],
+      "preLaunchTask": "${defaultBuildTask}"
+    }
+  ],
+  "inputs": [
+    {
+      "id": "folderPath",
+      "type": "promptString",
+      "description": "输入要打开的文件夹路径",
+      "default": "${workspaceFolder}/example"
+    },
+    {
+      "id": "filePath",
+      "type": "promptString",
+      "description": "输入要打开的文件路径",
+      "default": "${workspaceFolder}/example/test.js"
+    },
+    {
+      "id": "anyFolderPath",
+      "type": "promptString",
+      "description": "输入要打开的任意文件夹的绝对路径",
+      "default": "/Users/yourname/projects/your-project"
+    },
+    {
+      "id": "anyFilePath",
+      "type": "promptString",
+      "description": "输入要打开的任意文件的绝对路径",
+      "default": "/Users/yourname/projects/your-project/src/example.js"
+    }
+  ]
+} 

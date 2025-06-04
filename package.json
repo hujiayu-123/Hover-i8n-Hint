@@ -1,0 +1,131 @@
+{
+  "name": "hover-i18n-hint",
+  "displayName": "Hover I18n Hint - 国际化提示",
+  "description": "在代码编辑器中悬停在国际化 key 上时显示对应的中文文案，支持多语言和多种格式，提高开发效率。",
+  "version": "0.0.2",
+  "publisher": "your-name",
+  "engines": {
+    "vscode": ">=1.70.0"
+  },
+  "icon": "resources/icon.png",
+  "categories": [
+    "Other",
+    "Internationalization"
+  ],
+  "keywords": [
+    "i18n",
+    "国际化",
+    "hover",
+    "悬停提示",
+    "中文"
+  ],
+  "activationEvents": [
+    "onLanguage:javascript",
+    "onLanguage:typescript",
+    "onLanguage:javascriptreact",
+    "onLanguage:typescriptreact",
+    "onLanguage:vue",
+    "onLanguage:html",
+    "onLanguage:json",
+    "onLanguage:plaintext",
+    "onCommand:hoverI18nHint.test",
+    "onCommand:hoverI18nHint.refresh",
+    "onCommand:hoverI18nHint.toggle",
+    "onCommand:hoverI18nHint.diagnose",
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "hoverI18nHint.test",
+        "title": "测试国际化提示",
+        "category": "Hover I18n Hint"
+      },
+      {
+        "command": "hoverI18nHint.refresh",
+        "title": "刷新国际化提示",
+        "category": "Hover I18n Hint"
+      },
+      {
+        "command": "hoverI18nHint.toggle",
+        "title": "切换国际化提示",
+        "category": "Hover I18n Hint"
+      },
+      {
+        "command": "hoverI18nHint.diagnose",
+        "title": "诊断国际化资源加载问题",
+        "category": "Hover I18n Hint"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "Hover I18n Hint 配置",
+      "properties": {
+        "hoverI18nHint.localePath": {
+          "type": "string",
+          "default": "app/iframe/locale/zh.js",
+          "description": "国际化资源文件路径（相对于工作区根目录或绝对路径）"
+        },
+        "hoverI18nHint.language": {
+          "type": "string",
+          "default": "zh",
+          "enum": ["zh", "zh_CN", "en", "ja", "ko"],
+          "description": "默认语言"
+        },
+        "hoverI18nHint.keyPrefixes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "_t.R",
+            "R",
+            "LanData.R",
+            "i18n.t"
+          ],
+          "description": "支持的 key 前缀"
+        },
+        "hoverI18nHint.autoDetect": {
+          "type": "boolean",
+          "default": true,
+          "description": "自动检测国际化资源文件"
+        },
+        "hoverI18nHint.keyFormat": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": ["l\\d{4,}", "L\\d{4,}"],
+          "description": "支持的 key 正则表达式格式"
+        },
+        "hoverI18nHint.maxFileSizeKB": {
+          "type": "number",
+          "default": 100,
+          "description": "处理文件的最大大小（KB），超过此大小可能会影响性能"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile",
+    "test": "node ./out/test/runTest.js"
+  },
+  "devDependencies": {
+    "@types/glob": "^7.2.0",
+    "@types/node": "^18.0.0",
+    "@types/vscode": "^1.70.0",
+    "typescript": "^4.9.5"
+  },
+  "dependencies": {
+    "acorn": "^8.10.0",
+    "glob": "^7.2.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/hover-i18n-hint"
+  }
+}
