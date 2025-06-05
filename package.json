@@ -2,15 +2,16 @@
   "name": "hover-i18n-hint",
   "displayName": "Hover I18n Hint - 国际化提示",
   "description": "在代码编辑器中悬停在国际化 key 上时显示对应的中文文案，支持多语言和多种格式，提高开发效率。",
-  "version": "0.0.2",
-  "publisher": "your-name",
+  "version": "0.0.1",
+  "publisher": "HoverI18nHint",
   "engines": {
     "vscode": ">=1.70.0"
   },
   "icon": "resources/icon.png",
   "categories": [
     "Other",
-    "Internationalization"
+    "Programming Languages",
+    "Formatters"
   ],
   "keywords": [
     "i18n",
@@ -126,6 +127,6 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/hover-i18n-hint"
+    "url": "https://github.com/hujiayu-123/Hover-i8n-Hint.git"
   }
 }
