@@ -3,6 +3,57 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as glob from 'glob';
 
+// 配置类
+class Config {
+    // 是否启用插件
+    private _enabled: boolean = true;
+    
+    // 国际化文件路径
+    private _i18nFilePath: string = '';
+    
+    // 构造函数
+    constructor() {
+        this.loadConfig();
+    }
+    
+    // 加载配置
+    public loadConfig() {
+        const config = vscode.workspace.getConfiguration('hoverShowDes');
+        this._enabled = config.get<boolean>('enabled', true);
+        this._i18nFilePath = config.get<string>('i18nFilePath', '');
+    }
+    
+    // 保存配置
+    public saveConfig() {
+        const config = vscode.workspace.getConfiguration('hoverShowDes');
+        config.update('enabled', this._enabled, true);
+        config.update('i18nFilePath', this._i18nFilePath, true);
+    }
+    
+    // enabled属性
+    get enabled(): boolean {
+        return this._enabled;
+    }
+    
+    set enabled(value: boolean) {
+        this._enabled = value;
+        this.saveConfig();
+    }
+    
+    // i18nFilePath属性
+    get i18nFilePath(): string {
+        return this._i18nFilePath;
+    }
+    
+    set i18nFilePath(value: string) {
+        this._i18nFilePath = value;
+        this.saveConfig();
+    }
+}
+
+// 导出单例
+export const config = new Config();
+
 export function getConfig() {
   const config = vscode.workspace.getConfiguration('hoverI18nHint');
   return {

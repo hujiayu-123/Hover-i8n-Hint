@@ -1,467 +1,356 @@
 import * as vscode from 'vscode';
-import { loadI18nResource, watchI18nResource, I18nMap, setOutputChannel } from './i18nLoader';
-import { getConfig, findLocaleFiles } from './config';
+import { loadI18nResources } from './i18nLoader';
+import { config } from './config';
 import * as path from 'path';
-import * as fs from 'fs';
 
-let i18nMap: I18nMap = {};
+let i18nResources: Record<string, string> = {};
+let decorationTimeout: NodeJS.Timeout | undefined = undefined;
+let hoverProvider: vscode.Disposable | undefined = undefined;
+let fileWatcher: vscode.FileSystemWatcher | undefined = undefined;
 let decorationType: vscode.TextEditorDecorationType;
-let outputChannel: vscode.OutputChannel;
-let updateTimeout: NodeJS.Timeout | null = null;
-let isEnabled = true;
 
 export async function activate(context: vscode.ExtensionContext) {
-  console.log('---------------');
-  console.log('插件激活: Hover I18n Hint');
-  console.log('---------------');
-  
-  // 创建输出通道
-  outputChannel = vscode.window.createOutputChannel('Hover I18n Hint');
-  outputChannel.show();
-  
-  // 设置 i18nLoader 的输出通道
-  setOutputChannel(outputChannel);
-  
-  // 创建装饰器类型
-  decorationType = vscode.window.createTextEditorDecorationType({
-    after: {
-      margin: '0 0 0 10px',
-      color: '#888',
-      fontStyle: 'italic'
+    console.log('HoverShowDes 插件已激活');
+
+    try {
+        i18nResources = await loadI18nResources();
+        console.log(`已加载 ${Object.keys(i18nResources).length} 个国际化key`);
+        
+        // 设置文件监听器
+        setupFileWatcher(context);
+    } catch (error) {
+        console.error('加载国际化资源失败:', error);
+        vscode.window.showErrorMessage('国际化资源加载失败，插件功能受限');
     }
-  });
-  
-  try {
-    // 获取配置
-    const config = getConfig();
-    outputChannel.appendLine(`配置的国际化资源路径: ${config.localePath}`);
     
-    // 尝试查找国际化资源文件
-    let localePath = config.localePath;
-    
-    // 如果启用了自动检测，则尝试查找可能的国际化资源文件
-    if (config.autoDetect) {
-      outputChannel.appendLine('自动检测国际化资源文件...');
-      const localeFiles = await findLocaleFiles();
-      
-      if (localeFiles.length > 0) {
-        outputChannel.appendLine(`找到 ${localeFiles.length} 个可能的国际化资源文件:`);
-        localeFiles.forEach(file => outputChannel.appendLine(`- ${file}`));
-        
-        // 使用第一个找到的文件
-        localePath = localeFiles[0];
-        outputChannel.appendLine(`使用: ${localePath}`);
-        
-        // 如果找到多个文件，显示选择菜单
-        if (localeFiles.length > 1) {
-          const options = localeFiles.map(file => path.basename(path.dirname(file)) + '/' + path.basename(file));
-          const selected = await vscode.window.showQuickPick(options, {
-            placeHolder: '选择要使用的国际化资源文件'
-          });
-          
-          if (selected) {
-            const index = options.indexOf(selected);
-            if (index !== -1) {
-              localePath = localeFiles[index];
-              outputChannel.appendLine(`用户选择: ${localePath}`);
-            }
-          }
+    // 创建装饰器类型
+    decorationType = vscode.window.createTextEditorDecorationType({
+        after: {
+            color: '#888',
+            margin: '0 0 0 3px'
         }
-      }
-    }
+    });
+
+    // 注册Hover提供器
+    registerHoverProvider();
     
-    // 加载国际化资源
-    outputChannel.appendLine(`加载国际化资源: ${localePath}`);
-    i18nMap = await loadI18nResource(localePath);
+    // 注册文本装饰器
+    registerTextDecorator();
     
-    // 简化日志输出，只显示条目数量
-    outputChannel.appendLine(`已加载 ${Object.keys(i18nMap).length} 个国际化条目`);
-    
-    // 防抖更新当前编辑器的装饰器
-    debounceUpdateDecorations(vscode.window.activeTextEditor);
-    
-    // 当编辑器更改时更新装饰器 (使用防抖)
+    // 监听编辑器变化
     vscode.window.onDidChangeActiveTextEditor(editor => {
-      debounceUpdateDecorations(editor);
+        if (editor) {
+            updateDecorations(editor);
+        }
     }, null, context.subscriptions);
     
-    // 当文档更改时更新装饰器 (使用防抖和限制更新范围)
+    // 监听文档变化
     vscode.workspace.onDidChangeTextDocument(event => {
-      if (!isEnabled) return;
-      
-      const editor = vscode.window.activeTextEditor;
-      if (editor && event.document === editor.document) {
-        // 仅当编辑操作较少时才更新
-        if (event.contentChanges.length < 10) {
-          debounceUpdateDecorations(editor);
+        const editor = vscode.window.activeTextEditor;
+        if (editor && event.document === editor.document) {
+            updateDecorations(editor);
         }
-      }
     }, null, context.subscriptions);
     
-    // 监听资源文件变更（如果有工作区）
-    watchI18nResource(localePath, async () => {
-      outputChannel.appendLine('检测到国际化资源文件变更，重新加载...');
-      i18nMap = await loadI18nResource(localePath);
-      debounceUpdateDecorations(vscode.window.activeTextEditor);
-    });
-    
-    // 添加测试命令
-    const testCommand = vscode.commands.registerCommand('hoverI18nHint.test', () => {
-      outputChannel.show();
-      outputChannel.appendLine(`已加载 ${Object.keys(i18nMap).length} 个条目`);
-      vscode.window.showInformationMessage(`已加载 ${Object.keys(i18nMap).length} 个国际化条目`);
-    });
-    context.subscriptions.push(testCommand);
-    
-    // 添加手动刷新装饰器命令
-    const refreshCommand = vscode.commands.registerCommand('hoverI18nHint.refresh', () => {
-      updateDecorations(vscode.window.activeTextEditor);
-      vscode.window.showInformationMessage('已刷新国际化文案显示');
-    });
-    context.subscriptions.push(refreshCommand);
-    
-    // 添加启用/禁用命令
-    const toggleCommand = vscode.commands.registerCommand('hoverI18nHint.toggle', () => {
-      isEnabled = !isEnabled;
-      
-      if (isEnabled) {
+    // 初始化装饰器
+    if (vscode.window.activeTextEditor) {
         updateDecorations(vscode.window.activeTextEditor);
-        vscode.window.showInformationMessage('已启用国际化文案显示');
-      } else {
-        if (vscode.window.activeTextEditor) {
-          vscode.window.activeTextEditor.setDecorations(decorationType, []);
-        }
-        vscode.window.showInformationMessage('已禁用国际化文案显示');
-      }
-    });
-    context.subscriptions.push(toggleCommand);
-    
-    // 添加诊断命令，帮助用户检查文件路径问题
-    const diagnosticCommand = vscode.commands.registerCommand('hoverI18nHint.diagnose', async () => {
-      outputChannel.show();
-      outputChannel.appendLine('=== 开始诊断 ===');
-      
-      // 获取配置
-      const config = getConfig();
-      outputChannel.appendLine(`当前配置的国际化资源路径: ${config.localePath}`);
-      
-      // 检查绝对路径
-      if (path.isAbsolute(config.localePath)) {
-        outputChannel.appendLine(`检测到绝对路径配置`);
-        
+    }
+
+    // 刷新命令
+    const refreshCommand = vscode.commands.registerCommand('hoverShowDes.refresh', async () => {
+        vscode.window.showInformationMessage('正在刷新国际化资源...');
         try {
-          const fileExists = fs.existsSync(config.localePath);
-          outputChannel.appendLine(`文件是否存在: ${fileExists ? '是' : '否'}`);
-          
-          if (fileExists) {
-            try {
-              const stats = fs.statSync(config.localePath);
-              outputChannel.appendLine(`文件大小: ${stats.size} 字节`);
-              outputChannel.appendLine(`最后修改时间: ${stats.mtime}`);
-              
-              // 尝试读取文件头部
-              const content = fs.readFileSync(config.localePath, 'utf-8').substring(0, 200);
-              outputChannel.appendLine(`文件头部内容: ${content}`);
-            } catch (error) {
-              outputChannel.appendLine(`读取文件信息失败: ${error}`);
-            }
-          }
+            i18nResources = await loadI18nResources(true);
+            console.log(`重新加载了 ${Object.keys(i18nResources).length} 个国际化key`);
+            registerHoverProvider(); // 重新注册Hover提供器
+            updateDecorationsInAllEditors(); // 更新所有编辑器中的装饰器
         } catch (error) {
-          outputChannel.appendLine(`检查文件存在性失败: ${error}`);
+            vscode.window.showErrorMessage('刷新国际化资源失败: ' + error);
         }
-      } else {
-        // 检查相对路径在各工作区中的情况
-        const workspaceFolders = vscode.workspace.workspaceFolders;
-        if (!workspaceFolders || workspaceFolders.length === 0) {
-          outputChannel.appendLine('当前没有打开的工作区');
-        } else {
-          outputChannel.appendLine(`检查相对路径在 ${workspaceFolders.length} 个工作区中的情况:`);
-          
-          for (const folder of workspaceFolders) {
-            const fullPath = path.join(folder.uri.fsPath, config.localePath);
-            outputChannel.appendLine(`工作区: ${folder.name}`);
-            outputChannel.appendLine(`完整路径: ${fullPath}`);
-            
-            try {
-              const fileExists = fs.existsSync(fullPath);
-              outputChannel.appendLine(`文件是否存在: ${fileExists ? '是' : '否'}`);
-              
-              if (fileExists) {
-                try {
-                  const stats = fs.statSync(fullPath);
-                  outputChannel.appendLine(`文件大小: ${stats.size} 字节`);
-                } catch (error) {
-                  outputChannel.appendLine(`读取文件信息失败: ${error}`);
-                }
-              }
-            } catch (error) {
-              outputChannel.appendLine(`检查文件存在性失败: ${error}`);
-            }
-            
-            outputChannel.appendLine('---');
-          }
-        }
-      }
-      
-      // 查找可能的国际化文件
-      outputChannel.appendLine('尝试自动查找可能的国际化资源文件:');
-      const localeFiles = await findLocaleFiles();
-      
-      if (localeFiles.length > 0) {
-        outputChannel.appendLine(`找到 ${localeFiles.length} 个可能的国际化资源文件:`);
-        localeFiles.forEach(file => outputChannel.appendLine(`- ${file}`));
-        
-        // 询问用户是否要使用找到的文件
-        const selected = await vscode.window.showQuickPick(
-          ['是，使用第一个找到的文件', '否，保持当前设置'].concat(
-            localeFiles.map(file => `使用: ${file}`)
-          ),
-          { placeHolder: '是否要使用找到的国际化资源文件?' }
-        );
-        
-        if (selected && selected.startsWith('使用:')) {
-          const filePath = selected.substring(4).trim();
-          
-          // 更新设置
-          await vscode.workspace.getConfiguration('hoverI18nHint').update(
-            'localePath', 
-            filePath,
-            vscode.ConfigurationTarget.Workspace
-          );
-          
-          outputChannel.appendLine(`已更新配置，使用文件: ${filePath}`);
-          
-          // 重新加载国际化资源
-          i18nMap = await loadI18nResource(filePath);
-          debounceUpdateDecorations(vscode.window.activeTextEditor);
-          
-          vscode.window.showInformationMessage(`已加载国际化资源文件: ${path.basename(filePath)}`);
-        } else if (selected === '是，使用第一个找到的文件') {
-          // 更新设置
-          await vscode.workspace.getConfiguration('hoverI18nHint').update(
-            'localePath', 
-            localeFiles[0],
-            vscode.ConfigurationTarget.Workspace
-          );
-          
-          outputChannel.appendLine(`已更新配置，使用文件: ${localeFiles[0]}`);
-          
-          // 重新加载国际化资源
-          i18nMap = await loadI18nResource(localeFiles[0]);
-          debounceUpdateDecorations(vscode.window.activeTextEditor);
-          
-          vscode.window.showInformationMessage(`已加载国际化资源文件: ${path.basename(localeFiles[0])}`);
-        }
-      } else {
-        outputChannel.appendLine('未找到任何可能的国际化资源文件');
-        
-        // 提示用户手动设置路径
-        const input = await vscode.window.showInputBox({
-          prompt: '未找到国际化资源文件，请手动输入完整路径',
-          value: config.localePath,
-          validateInput: (value) => {
-            if (!value) return '路径不能为空';
-            return null;
-          }
-        });
-        
-        if (input) {
-          // 更新设置
-          await vscode.workspace.getConfiguration('hoverI18nHint').update(
-            'localePath', 
-            input,
-            vscode.ConfigurationTarget.Workspace
-          );
-          
-          outputChannel.appendLine(`已更新配置，使用文件: ${input}`);
-          
-          // 重新加载国际化资源
-          i18nMap = await loadI18nResource(input);
-          debounceUpdateDecorations(vscode.window.activeTextEditor);
-          
-          if (Object.keys(i18nMap).length > 8) { // 大于默认数据的条目数
-            vscode.window.showInformationMessage(`成功加载国际化资源文件: ${path.basename(input)}`);
-          } else {
-            vscode.window.showWarningMessage(`可能未正确加载文件: ${path.basename(input)}，仍使用默认数据`);
-          }
-        }
-      }
-      
-      outputChannel.appendLine('=== 诊断完成 ===');
     });
-    context.subscriptions.push(diagnosticCommand);
-    
-    // 显示成功消息
-    vscode.window.showInformationMessage(`国际化提示已启用，加载了 ${Object.keys(i18nMap).length} 个条目`);
-    
-    outputChannel.appendLine('插件激活完成! 请在编辑器中查看国际化文案提示');
-  } catch (error) {
-    outputChannel.appendLine(`错误: ${error}`);
-    console.error('插件激活过程中发生错误:', error);
-    vscode.window.showErrorMessage(`插件激活遇到问题，但将使用内置数据继续工作`);
-  }
+
+    // 切换启用状态命令
+    const toggleCommand = vscode.commands.registerCommand('hoverShowDes.toggle', () => {
+        config.enabled = !config.enabled;
+        vscode.window.showInformationMessage(`国际化提示已${config.enabled ? '启用' : '禁用'}`);
+        if (config.enabled) {
+            registerHoverProvider();
+            updateDecorationsInAllEditors();
+        } else {
+            if (hoverProvider) {
+                hoverProvider.dispose();
+                hoverProvider = undefined;
+            }
+            clearDecorationsInAllEditors();
+        }
+    });
+
+    context.subscriptions.push(
+        refreshCommand,
+        toggleCommand,
+        decorationType
+    );
 }
 
-// 防抖函数，避免频繁更新装饰器
-function debounceUpdateDecorations(editor?: vscode.TextEditor) {
-  if (!isEnabled) return;
-  
-  if (updateTimeout) {
-    clearTimeout(updateTimeout);
-  }
-  
-  updateTimeout = setTimeout(() => {
-    updateDecorations(editor);
-    updateTimeout = null;
-  }, 300);
+// 更新所有编辑器中的装饰器
+function updateDecorationsInAllEditors() {
+    vscode.window.visibleTextEditors.forEach(editor => {
+        updateDecorations(editor);
+    });
+}
+
+// 清除所有编辑器中的装饰器
+function clearDecorationsInAllEditors() {
+    vscode.window.visibleTextEditors.forEach(editor => {
+        editor.setDecorations(decorationType, []);
+    });
+}
+
+// 注册文本装饰器
+function registerTextDecorator() {
+    // 已通过事件监听实现，无需额外注册
 }
 
 // 更新装饰器
-function updateDecorations(editor?: vscode.TextEditor) {
-  if (!isEnabled || !editor) {
-    return;
-  }
-  
-  // 限制文件大小，避免大文件卡顿
-  if (editor.document.getText().length > 100000) {
-    return; // 跳过大文件
-  }
-  
-  const decorations: vscode.DecorationOptions[] = [];
-  const text = editor.document.getText();
-  
-  // 增强版正则表达式，支持更多形式的国际化key
-  // 1. 直接使用的key: l0359, L0359
-  // 2. 字符串形式: 'l0359', "l0359"
-  // 3. 对象访问: R.l0359, strings.l0359
-  // 4. JSX中的使用: {l0359}
-  
-  // 匹配模式1: 直接使用的key (非字符串，非对象属性)
-  const pattern1 = /\b([lL]\d{4,})\b(?!\s*[:=]|['"])/g;
-  
-  // 匹配模式2: 字符串形式的key
-  const pattern2 = /['"]([lL]\d{4,})['"]/g;
-  
-  // 匹配模式3: JSX中的使用 {l0359}
-  const pattern3 = /\{([lL]\d{4,})\}/g;
-  
-  // 使用模式1匹配
-  let match;
-  let count = 0;
-  const maxDecorations = 500; // 限制装饰器数量
-  
-  // 检查是否为zh.js文件 - 这类文件不需要显示装饰器
-  const fileName = editor.document.fileName.toLowerCase();
-  if (fileName.endsWith('zh.js') || fileName.endsWith('zh_cn.js') || fileName.endsWith('locale.js')) {
-    return; // 跳过国际化资源文件
-  }
-  
-  // 辅助函数，用于从i18nMap中获取值，考虑到可能的不同结构
-  const getI18nValue = (key: string): string | undefined => {
-    // 标准化key（统一小写以便于查找）
-    const normalizedKey = key.toLowerCase();
+function updateDecorations(editor: vscode.TextEditor) {
+    if (!config.enabled) return;
     
-    // 直接查找
-    if (i18nMap[key]) {
-      return i18nMap[key];
+    // 判断是否在zh.js文件中
+    const fileName = editor.document.fileName.toLowerCase();
+    if (fileName.endsWith('zh.js')) {
+        // 在zh.js文件中不显示装饰器
+        editor.setDecorations(decorationType, []);
+        return;
     }
     
-    // 尝试查找小写版本
-    if (i18nMap[normalizedKey]) {
-      return i18nMap[normalizedKey];
+    // 延迟更新以避免频繁计算
+    if (decorationTimeout) {
+        clearTimeout(decorationTimeout);
+        decorationTimeout = undefined;
     }
     
-    return undefined;
-  };
-  
-  while ((match = pattern1.exec(text)) && count < maxDecorations) {
-    const key = match[1];
-    const value = getI18nValue(key);
-    
-    if (value) {
-      count++;
-      
-      const startPos = editor.document.positionAt(match.index);
-      const endPos = editor.document.positionAt(match.index + key.length);
-      
-      const decoration: vscode.DecorationOptions = {
-        range: new vscode.Range(startPos, endPos),
-        hoverMessage: new vscode.MarkdownString(`**${key}**: ${value}`),
-        renderOptions: {
-          after: {
-            contentText: ` → ${value}`,
-          }
+    decorationTimeout = setTimeout(() => {
+        const decorations: vscode.DecorationOptions[] = [];
+        const document = editor.document;
+        const text = document.getText();
+        
+        // 跟踪已添加的key位置，避免重复
+        const addedPositions = new Set<string>();
+        
+        // 分行处理，找出所有可能的国际化key
+        const lines = text.split('\n');
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            const keys = findI18nKeysInLine(line);
+            
+            for (const keyInfo of keys) {
+                const key = keyInfo.key;
+                const value = i18nResources[key];
+                
+                if (value) {
+                    // 创建位置标识符
+                    const posKey = `${i}:${keyInfo.start}:${keyInfo.end}`;
+                    
+                    // 避免在同一位置添加多个装饰器
+                    if (!addedPositions.has(posKey)) {
+                        addedPositions.add(posKey);
+                        
+                        // 创建装饰器选项
+                        const decoration: vscode.DecorationOptions = {
+                            range: new vscode.Range(
+                                new vscode.Position(i, keyInfo.start),
+                                new vscode.Position(i, keyInfo.end)
+                            ),
+                            renderOptions: {
+                                after: {
+                                    contentText: ` → ${value}`
+                                }
+                            }
+                        };
+                        
+                        decorations.push(decoration);
+                    }
+                }
+            }
         }
-      };
-      
-      decorations.push(decoration);
+        
+        // 应用装饰器
+        editor.setDecorations(decorationType, decorations);
+        
+    }, 200);
+}
+
+// 设置文件监听器，监听国际化资源文件的变化
+function setupFileWatcher(context: vscode.ExtensionContext) {
+    if (fileWatcher) {
+        fileWatcher.dispose();
     }
-  }
-  
-  // 使用模式2匹配
-  while ((match = pattern2.exec(text)) && count < maxDecorations) {
-    const key = match[1];
-    const value = getI18nValue(key);
     
-    if (value) {
-      count++;
-      
-      const startPos = editor.document.positionAt(match.index + 1); // +1 跳过引号
-      const endPos = editor.document.positionAt(match.index + key.length + 1);
-      
-      const decoration: vscode.DecorationOptions = {
-        range: new vscode.Range(startPos, endPos),
-        hoverMessage: new vscode.MarkdownString(`**${key}**: ${value}`),
-        renderOptions: {
-          after: {
-            contentText: ` → ${value}`,
-          }
-        }
-      };
-      
-      decorations.push(decoration);
-    }
-  }
-  
-  // 使用模式3匹配
-  while ((match = pattern3.exec(text)) && count < maxDecorations) {
-    const key = match[1];
-    const value = getI18nValue(key);
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders) return;
     
-    if (value) {
-      count++;
-      
-      const startPos = editor.document.positionAt(match.index + 1); // +1 跳过 {
-      const endPos = editor.document.positionAt(match.index + key.length + 1);
-      
-      const decoration: vscode.DecorationOptions = {
-        range: new vscode.Range(startPos, endPos),
-        hoverMessage: new vscode.MarkdownString(`**${key}**: ${value}`),
-        renderOptions: {
-          after: {
-            contentText: ` → ${value}`,
-          }
+    // 修改为监听所有语言资源文件
+    fileWatcher = vscode.workspace.createFileSystemWatcher('**/*{zh,en}.js');
+    
+    // 当文件变化时重新加载资源
+    fileWatcher.onDidChange(async (uri) => {
+        console.log(`检测到国际化资源文件变化: ${uri.fsPath}`);
+        vscode.window.setStatusBarMessage('国际化资源文件已更新，正在重新加载...', 3000);
+        
+        try {
+            i18nResources = await loadI18nResources(true);
+            console.log(`重新加载了 ${Object.keys(i18nResources).length} 个国际化key`);
+            vscode.window.setStatusBarMessage(`已重新加载 ${Object.keys(i18nResources).length} 个国际化key`, 3000);
+        } catch (error) {
+            console.error('重新加载资源失败:', error);
         }
-      };
-      
-      decorations.push(decoration);
+    });
+    
+    // 当文件创建时重新加载资源
+    fileWatcher.onDidCreate(async (uri) => {
+        console.log(`检测到新增国际化资源文件: ${uri.fsPath}`);
+        vscode.window.setStatusBarMessage('发现新的国际化资源文件，正在加载...', 3000);
+        
+        try {
+            i18nResources = await loadI18nResources(true);
+            console.log(`加载了 ${Object.keys(i18nResources).length} 个国际化key`);
+        } catch (error) {
+            console.error('加载新资源文件失败:', error);
+        }
+    });
+    
+    context.subscriptions.push(fileWatcher);
+}
+
+function registerHoverProvider() {
+    // 先移除旧的provider
+    if (hoverProvider) {
+        hoverProvider.dispose();
     }
-  }
-  
-  editor.setDecorations(decorationType, decorations);
-  
-  // 输出诊断信息
-  if (count > 0) {
-    outputChannel.appendLine(`在当前文件中找到并显示了 ${count} 个国际化提示`);
-  }
+
+    if (!config.enabled) return;
+
+    // 创建新的provider
+    hoverProvider = vscode.languages.registerHoverProvider(
+        ['javascript', 'typescript', 'javascriptreact', 'typescriptreact', 'vue'],
+        {
+            // 设置较高的优先级，使我们的提示能覆盖VS Code的内置提示
+            provideHover(document, position, token) {
+                // 获取当前行文本
+                const line = document.lineAt(position.line).text;
+                
+                // 检查文件名，如果是zh.js则不显示提示
+                const fileName = document.fileName.toLowerCase();
+                if (fileName.endsWith('zh.js')) {
+                    return null; // 在zh.js文件中不显示提示
+                }
+                
+                // 查找这一行中所有可能的国际化key
+                const i18nKeys = findI18nKeysInLine(line);
+                
+                // 检查光标是否位于某个key上
+                for (const keyInfo of i18nKeys) {
+                    const keyRange = new vscode.Range(
+                        new vscode.Position(position.line, keyInfo.start),
+                        new vscode.Position(position.line, keyInfo.end)
+                    );
+                    
+                    if (keyRange.contains(position)) {
+                        const key = keyInfo.key;
+                        const value = i18nResources[key];
+                        
+                        if (value) {
+                            // 创建更明显的提示
+                            const hoverContent = new vscode.MarkdownString();
+                            hoverContent.isTrusted = true;
+                            hoverContent.appendMarkdown(`### 国际化提示\n\n**${key}**: ${value}`);
+                            
+                            return new vscode.Hover(hoverContent);
+                        }
+                    }
+                }
+                
+                return null;
+            }
+        }
+    );
+}
+
+// 查找一行中的所有国际化key
+function findI18nKeysInLine(line: string): Array<{key: string, start: number, end: number}> {
+    const keys: Array<{key: string, start: number, end: number}> = [];
+    
+    // 在en.js文件中，国际化key通常以这种形式出现：'l0001': 'Search',
+    // 先尝试更精确的匹配，以避免重复
+    const keyValueRegex = /'(l\d+)':\s*'([^']+)'/g;
+    let match;
+    
+    while ((match = keyValueRegex.exec(line)) !== null) {
+        const key = match[1]; // 例如 'l0001'
+        
+        if (!i18nResources[key]) continue;
+        
+        const keyStart = line.indexOf(key, match.index);
+        const keyEnd = keyStart + key.length;
+        
+        // 检查是否已经添加过这个key
+        if (!keys.some(k => k.key === key && k.start === keyStart && k.end === keyEnd)) {
+            keys.push({
+                key,
+                start: keyStart,
+                end: keyEnd
+            });
+        }
+    }
+    
+    // 如果使用精确匹配没找到，再尝试其他模式
+    if (keys.length === 0) {
+        // 匹配多种格式的国际化key
+        const patterns = [
+            { regex: /window\.LanData\.R\['(l\d+)'\]/g, group: 1 },
+            { regex: /window\.LanData\.R\["(l\d+)"\]/g, group: 1 },
+            { regex: /LanData\.R\['(l\d+)'\]/g, group: 1 },
+            { regex: /LanData\.R\["(l\d+)"\]/g, group: 1 },
+            { regex: /R\['(l\d+)'\]/g, group: 1 },
+            { regex: /R\["(l\d+)"\]/g, group: 1 },
+            { regex: /R\.(l\d+)/g, group: 1 },
+            { regex: /t\(['"]?(l\d+)['"]?\)/g, group: 1 },
+            { regex: /i18n\.t\(['"]?(l\d+)['"]?\)/g, group: 1 },
+            // 添加匹配en.js文件中的格式，但更精确
+            { regex: /'(l\d+)':/g, group: 1 },
+            { regex: /"(l\d+)":/g, group: 1 }
+        ];
+        
+        for (const pattern of patterns) {
+            while ((match = pattern.regex.exec(line)) !== null) {
+                const key = match[pattern.group];
+                if (!key || !i18nResources[key]) continue;
+                
+                const keyStart = line.indexOf(key, match.index);
+                const keyEnd = keyStart + key.length;
+                
+                // 检查是否已经添加过这个key
+                if (!keys.some(k => k.key === key && k.start === keyStart && k.end === keyEnd)) {
+                    keys.push({
+                        key,
+                        start: keyStart,
+                        end: keyEnd
+                    });
+                }
+            }
+        }
+    }
+    
+    return keys;
 }
 
 export function deactivate() {
-  console.log('插件停用: Hover I18n Hint');
-  if (decorationType) {
-    decorationType.dispose();
-  }
-  if (updateTimeout) {
-    clearTimeout(updateTimeout);
-  }
+    console.log('HoverShowDes 插件已停用');
+    if (hoverProvider) {
+        hoverProvider.dispose();
+    }
+    if (fileWatcher) {
+        fileWatcher.dispose();
+    }
 } 

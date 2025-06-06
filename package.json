@@ -2,7 +2,7 @@
   "name": "hover-i18n-hint",
   "displayName": "Hover I18n Hint - 国际化提示",
   "description": "在代码编辑器中悬停在国际化 key 上时显示对应的中文文案，支持多语言和多种格式，提高开发效率。",
-  "version": "0.0.1",
+  "version": "0.0.3",
   "publisher": "HoverI18nHint",
   "engines": {
     "vscode": ">=1.70.0"
@@ -39,73 +39,48 @@
   "contributes": {
     "commands": [
       {
-        "command": "hoverI18nHint.test",
-        "title": "测试国际化提示",
-        "category": "Hover I18n Hint"
+        "command": "hoverShowDes.refresh",
+        "title": "刷新国际化资源"
       },
       {
-        "command": "hoverI18nHint.refresh",
-        "title": "刷新国际化提示",
-        "category": "Hover I18n Hint"
-      },
-      {
-        "command": "hoverI18nHint.toggle",
-        "title": "切换国际化提示",
-        "category": "Hover I18n Hint"
-      },
-      {
-        "command": "hoverI18nHint.diagnose",
-        "title": "诊断国际化资源加载问题",
-        "category": "Hover I18n Hint"
+        "command": "hoverShowDes.toggle",
+        "title": "切换国际化提示"
       }
     ],
     "configuration": {
-      "type": "object",
-      "title": "Hover I18n Hint 配置",
+      "title": "HoverShowDes",
       "properties": {
-        "hoverI18nHint.localePath": {
-          "type": "string",
-          "default": "app/iframe/locale/zh.js",
-          "description": "国际化资源文件路径（相对于工作区根目录或绝对路径）"
-        },
-        "hoverI18nHint.language": {
-          "type": "string",
-          "default": "zh",
-          "enum": ["zh", "zh_CN", "en", "ja", "ko"],
-          "description": "默认语言"
-        },
-        "hoverI18nHint.keyPrefixes": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "default": [
-            "_t.R",
-            "R",
-            "LanData.R",
-            "i18n.t"
-          ],
-          "description": "支持的 key 前缀"
-        },
-        "hoverI18nHint.autoDetect": {
+        "hoverShowDes.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "自动检测国际化资源文件"
+          "description": "是否启用国际化提示"
         },
-        "hoverI18nHint.keyFormat": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "default": ["l\\d{4,}", "L\\d{4,}"],
-          "description": "支持的 key 正则表达式格式"
+        "hoverShowDes.i18nFilePath": {
+          "type": "string",
+          "default": "",
+          "description": "国际化资源文件路径，相对于工作区根目录"
         },
-        "hoverI18nHint.maxFileSizeKB": {
-          "type": "number",
-          "default": 100,
-          "description": "处理文件的最大大小（KB），超过此大小可能会影响性能"
+        "hoverShowDes.displayMode": {
+          "type": "string",
+          "enum": ["hover", "inline", "both"],
+          "default": "hover",
+          "description": "提示显示模式：hover=鼠标悬停时显示，inline=行内显示，both=两者都启用"
         }
       }
+    },
+    "menus": {
+      "editor/context": [
+        {
+          "command": "hoverI18nHint.refresh",
+          "group": "hoverI18nHint",
+          "when": "editorTextFocus"
+        },
+        {
+          "command": "hoverI18nHint.toggle",
+          "group": "hoverI18nHint",
+          "when": "editorTextFocus"
+        }
+      ]
     }
   },
   "scripts": {

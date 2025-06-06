@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { I18nMap } from './types';
 import * as os from 'os';
+import { config, findLocaleFiles } from './config';
 
 // 内置的示例国际化数据（用于测试或无工作区时）
 const DEFAULT_I18N_DATA: I18nMap = {
@@ -15,6 +16,9 @@ const DEFAULT_I18N_DATA: I18nMap = {
   l1005: '手术记录',
   l1006: '随访计划'
 };
+
+// 缓存的资源数据
+let cachedResources: Record<string, string> | null = null;
 
 // 全局日志通道引用
 let outputChannel: vscode.OutputChannel | null = null;
@@ -249,14 +253,7 @@ function extractI18nDataFromContent(content: string): I18nMap {
             }
             
             if (entryCount > 0) {
-              log(`方法 6 成功提取国际化数据，找到 ${entryCount} 个条目`);
-              
-              // 输出前 5 个条目作为示例
-              const keys = Object.keys(i18nData).slice(0, 5);
-              keys.forEach(key => {
-                log(`- ${key}: ${i18nData[key]}`);
-              });
-              
+              log(`方法 6 成功收集 ${entryCount} 个国际化条目`);
               return i18nData;
             }
           }
@@ -299,12 +296,230 @@ function extractI18nDataFromContent(content: string): I18nMap {
     } catch (e) {
       log(`方法 6 处理过程中出现错误: ${e}`, true);
     }
+    
+    // 方法 7: 处理 IIFE 格式的 en.js 文件
+    // 格式: (function(window){ var en={name:'en',R:{...}} window.LanData = en; })(this)
+    log('尝试方法 7: 处理 IIFE 格式的 en.js 文件');
+    try {
+      // 查找 en.R 对象
+      const enObjectRegex = /var\s+en\s*=\s*{[^}]*name\s*:\s*['"]en['"][^}]*,\s*R\s*:\s*({[\s\S]*?})(?=\s*})/;
+      const enObjectMatch = content.match(enObjectRegex);
+      
+      if (enObjectMatch && enObjectMatch[1]) {
+        // 替换函数调用和commonHM等变量（可能出现在值中的特殊情况）
+        let cleanCode = enObjectMatch[1]
+          .replace(/commonHM\.[\w\.]+(\['[\w]+']\)?)?/g, "''") // 替换commonHM变量引用
+          .replace(/\?.*:/g, ':') // 替换三元表达式
+          .replace(/,(\s*})/g, '$1'); // 修复尾随逗号
+        
+        try {
+          // 先将代码包装在对象中以便解析
+          const parsed = eval('({' + cleanCode + '})');
+          if (parsed && typeof parsed === 'object') {
+            log(`方法 7 成功解析，找到对象`);
+            
+            // 收集所有符合格式的键值对
+            const i18nData: I18nMap = {};
+            let entryCount = 0;
+            
+            // 遍历解析出的对象，提取所有格式为 'lXXXX': '文本' 的键值对
+            for (const key in parsed) {
+              if (key.match(/^[lL]\d{4,}$/) && typeof parsed[key] === 'string') {
+                i18nData[key] = parsed[key];
+                entryCount++;
+              }
+            }
+            
+            if (entryCount > 0) {
+              log(`方法 7 成功收集 ${entryCount} 个国际化条目`);
+              return i18nData;
+            }
+          }
+        } catch (evalErr) {
+          log(`方法 7 解析对象失败: ${evalErr}`, true);
+        }
+      }
+    } catch (error) {
+      log(`方法 7 出错: ${error}`, true);
+    }
   } catch (e) {
     log(`解析过程中出现错误: ${e}`, true);
   }
   
   log('所有解析方法都失败，返回空结果');
   return {};
+}
+
+/**
+ * 加载国际化资源
+ * @param forceReload 是否强制重新加载
+ */
+export async function loadI18nResources(forceReload: boolean = false): Promise<Record<string, string>> {
+  // 如果已缓存且不需要强制重新加载，则返回缓存
+  if (cachedResources && !forceReload) {
+    return cachedResources;
+  }
+
+  // 初始结果，使用内置数据
+  let resources: Record<string, string> = { ...DEFAULT_I18N_DATA };
+  
+  try {
+    // 优先查找和加载zh.js文件
+    log('优先查找zh.js文件');
+    const zhFiles = await vscode.workspace.findFiles('**/zh.js', '**/node_modules/**', 10);
+    log(`全局搜索找到 ${zhFiles.length} 个zh.js文件`);
+    
+    // 尝试从找到的zh.js文件中加载数据
+    for (const file of zhFiles) {
+      try {
+        log(`尝试加载中文资源文件: ${file.fsPath}`);
+        const data = await loadI18nResource(file.fsPath);
+        if (Object.keys(data).length > 0) {
+          log(`成功从 ${file.fsPath} 加载 ${Object.keys(data).length} 个中文条目`);
+          resources = { ...resources, ...data };
+        }
+      } catch (error) {
+        log(`加载中文资源文件 ${file.fsPath} 失败: ${error}`, true);
+      }
+    }
+    
+    // 检查配置的文件路径
+    if (config.i18nFilePath) {
+      log(`尝试从配置的路径加载资源: ${config.i18nFilePath}`);
+      try {
+        const data = await loadI18nResource(config.i18nFilePath);
+        if (Object.keys(data).length > 0) {
+          log(`从配置的路径成功加载 ${Object.keys(data).length} 个国际化条目`);
+          resources = { ...resources, ...data };
+        }
+      } catch (error) {
+        log(`从配置的路径加载失败: ${error}`, true);
+      }
+    }
+    
+    // 尝试查找标准的zh.js路径
+    const standardZhPaths = [
+      'app/iframe/locale/zh.js',
+      'src/locale/zh.js',
+      'locale/zh.js',
+      'src/i18n/zh.js',
+      'i18n/zh.js',
+      'src/locales/zh.js',
+      'locales/zh.js',
+      'public/locales/zh.js',
+      'public/i18n/zh.js',
+      'assets/locales/zh.js',
+      'assets/i18n/zh.js',
+      'app/component/locales/zh.js',
+      'app/component/i18n/zh.js',
+      'component/locales/zh.js',
+      'component/i18n/zh.js',
+      'app/i18n/zh.js',
+      'app/locale/zh.js',
+      'app/locales/zh.js'
+    ];
+    
+    for (const relativePath of standardZhPaths) {
+      try {
+        log(`尝试标准中文路径: ${relativePath}`);
+        const data = await loadI18nResource(relativePath);
+        if (Object.keys(data).length > 0) {
+          log(`成功从标准中文路径 ${relativePath} 加载 ${Object.keys(data).length} 个条目`);
+          resources = { ...resources, ...data };
+        }
+      } catch (error) {
+        // 忽略错误，继续尝试下一个路径
+      }
+    }
+    
+    // 缓存结果
+    cachedResources = resources;
+    return resources;
+  } catch (error) {
+    log(`加载国际化资源失败: ${error}`, true);
+    return resources; // 即使失败也返回已加载的资源
+  }
+}
+
+/**
+ * 解析国际化内容
+ * @param content 文件内容
+ */
+function parseI18nContent(content: string): Record<string, string> | null {
+    const resources: Record<string, string> = {};
+
+    try {
+        // 尝试解析导出对象格式 (export default { l1001: '搜索', ... })
+        const exportDefaultMatch = content.match(/export\s+default\s*(\{[\s\S]*\})/);
+        if (exportDefaultMatch) {
+            const objectContent = exportDefaultMatch[1];
+            
+            // 使用正则表达式提取键值对
+            const keyValuePattern = /['"]?(l\d+)['"]?\s*:\s*['"]([^'"]*)['"]/g;
+            let match;
+            while ((match = keyValuePattern.exec(objectContent)) !== null) {
+                resources[match[1]] = match[2];
+            }
+            
+            console.log(`从导出对象格式中提取到 ${Object.keys(resources).length} 个key`);
+        }
+
+        // 尝试解析LanData格式
+        if (Object.keys(resources).length === 0) {
+            const lanDataMatch = content.match(/window\.LanData\s*=\s*(\{[\s\S]*\})/);
+            if (lanDataMatch) {
+                // 使用正则表达式提取键值对
+                const lanDataKeyValuePattern = /['"]?(l\d+)['"]?\s*:\s*['"]([^'"]*)['"]/g;
+                let match;
+                while ((match = lanDataKeyValuePattern.exec(content)) !== null) {
+                    resources[match[1]] = match[2];
+                }
+                console.log(`从LanData格式中提取到 ${Object.keys(resources).length} 个key`);
+            }
+        }
+
+        // 尝试解析module.exports格式
+        if (Object.keys(resources).length === 0) {
+            const moduleExportsMatch = content.match(/module\.exports\s*=\s*(\{[\s\S]*\})/);
+            if (moduleExportsMatch) {
+                const moduleExportsContent = moduleExportsMatch[1];
+                const keyValuePattern = /['"]?(l\d+)['"]?\s*:\s*['"]([^'"]*)['"]/g;
+                let match;
+                while ((match = keyValuePattern.exec(moduleExportsContent)) !== null) {
+                    resources[match[1]] = match[2];
+                }
+                console.log(`从module.exports格式中提取到 ${Object.keys(resources).length} 个key`);
+            }
+        }
+
+        // 尝试解析常量对象格式
+        if (Object.keys(resources).length === 0) {
+            const constObjMatch = content.match(/const\s+R\s*=\s*(\{[\s\S]*\})/);
+            if (constObjMatch) {
+                const constObjContent = constObjMatch[1];
+                const keyValuePattern = /['"]?(l\d+)['"]?\s*:\s*['"]([^'"]*)['"]/g;
+                let match;
+                while ((match = keyValuePattern.exec(constObjContent)) !== null) {
+                    resources[match[1]] = match[2];
+                }
+                console.log(`从常量对象格式中提取到 ${Object.keys(resources).length} 个key`);
+            }
+        }
+
+        // 最后尝试通用提取所有可能的l开头数字格式的key
+        if (Object.keys(resources).length === 0) {
+            const generalPattern = /['"]?(l\d+)['"]?\s*:\s*['"]([^'"]*)['"]/g;
+            let match;
+            while ((match = generalPattern.exec(content)) !== null) {
+                resources[match[1]] = match[2];
+            }
+            console.log(`从通用格式中提取到 ${Object.keys(resources).length} 个key`);
+        }
+    } catch (error) {
+        console.error('解析国际化内容失败:', error);
+    }
+
+    return resources;
 }
 
 // 读取并解析国际化资源文件，返回 key-value 映射
