@@ -124,6 +124,14 @@ function updateDecorations(editor: vscode.TextEditor) {
         return;
     }
     
+    // 检查文件类型是否支持
+    const languageId = editor.document.languageId;
+    const supportedLanguages = ['javascript', 'typescript', 'javascriptreact', 'typescriptreact', 'vue', 'html'];
+    if (!supportedLanguages.includes(languageId)) {
+        editor.setDecorations(decorationType, []);
+        return;
+    }
+    
     // 延迟更新以避免频繁计算
     if (decorationTimeout) {
         clearTimeout(decorationTimeout);
@@ -231,9 +239,9 @@ function registerHoverProvider() {
 
     if (!config.enabled) return;
 
-    // 创建新的provider
+    // 创建新的provider - 添加html和vue文件支持
     hoverProvider = vscode.languages.registerHoverProvider(
-        ['javascript', 'typescript', 'javascriptreact', 'typescriptreact', 'vue'],
+        ['javascript', 'typescript', 'javascriptreact', 'typescriptreact', 'vue', 'html'],
         {
             // 设置较高的优先级，使我们的提示能覆盖VS Code的内置提示
             provideHover(document, position, token) {
@@ -308,6 +316,7 @@ function findI18nKeysInLine(line: string): Array<{key: string, start: number, en
     if (keys.length === 0) {
         // 匹配多种格式的国际化key
         const patterns = [
+            // JavaScript/TypeScript 格式
             { regex: /window\.LanData\.R\['(l\d+)'\]/g, group: 1 },
             { regex: /window\.LanData\.R\["(l\d+)"\]/g, group: 1 },
             { regex: /LanData\.R\['(l\d+)'\]/g, group: 1 },
@@ -319,7 +328,20 @@ function findI18nKeysInLine(line: string): Array<{key: string, start: number, en
             { regex: /i18n\.t\(['"]?(l\d+)['"]?\)/g, group: 1 },
             // 添加匹配en.js文件中的格式，但更精确
             { regex: /'(l\d+)':/g, group: 1 },
-            { regex: /"(l\d+)":/g, group: 1 }
+            { regex: /"(l\d+)":/g, group: 1 },
+            
+            // HTML/Vue 模板格式
+            { regex: /\{\{\s*(l\d+)\s*\}\}/g, group: 1 }, // {{ l1001 }}
+            { regex: /v-text=['"]?(l\d+)['"]?/g, group: 1 }, // v-text="l1001"
+            { regex: /v-html=['"]?(l\d+)['"]?/g, group: 1 }, // v-html="l1001"
+            { regex: /:text=['"]?(l\d+)['"]?/g, group: 1 }, // :text="l1001"
+            { regex: /:title=['"]?(l\d+)['"]?/g, group: 1 }, // :title="l1001"
+            { regex: /:placeholder=['"]?(l\d+)['"]?/g, group: 1 }, // :placeholder="l1001"
+            { regex: /:label=['"]?(l\d+)['"]?/g, group: 1 }, // :label="l1001"
+            { regex: /tiplan=['"]?(l\d+)['"]?/g, group: 1 }, // tiplan="l1008"
+            { regex: /lan=['"]?(l\d+)['"]?/g, group: 1 }, // lan="l1007"
+            { regex: /data-i18n=['"]?(l\d+)['"]?/g, group: 1 }, // data-i18n="l1001"
+            { regex: /i18n-key=['"]?(l\d+)['"]?/g, group: 1 }, // i18n-key="l1001"
         ];
         
         for (const pattern of patterns) {
