@@ -86,9 +86,17 @@ export async function activate(context: vscode.ExtensionContext) {
         }
     });
 
+    // 切换行内文本显示命令
+    const toggleInlineCommand = vscode.commands.registerCommand('hoverShowDes.toggleInline', () => {
+        config.showInlineText = !config.showInlineText;
+        vscode.window.showInformationMessage(`行内文本显示已${config.showInlineText ? '启用' : '禁用'}`);
+        updateDecorationsInAllEditors();
+    });
+
     context.subscriptions.push(
         refreshCommand,
         toggleCommand,
+        toggleInlineCommand,
         decorationType
     );
 }
@@ -114,7 +122,11 @@ function registerTextDecorator() {
 
 // 更新装饰器
 function updateDecorations(editor: vscode.TextEditor) {
-    if (!config.enabled) return;
+    if (!config.enabled || !config.showInlineText) {
+        // 如果插件被禁用或者不显示行内文本，清除装饰器
+        editor.setDecorations(decorationType, []);
+        return;
+    }
     
     // 判断是否在zh.js文件中
     const fileName = editor.document.fileName.toLowerCase();

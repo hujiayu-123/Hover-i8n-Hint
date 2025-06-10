@@ -111,8 +111,7 @@
 |----------------------------|-----------------------------|-----------------------------|
 | `hoverShowDes.i18nFilePath` | 国际化资源文件路径（相对于工作区或绝对路径） | `app/iframe/locale/zh.js`  |
 | `hoverShowDes.enabled`     | 启用/禁用国际化提示          | `true`                      |
-| `hoverShowDes.displayMode` | 显示模式（hover=悬停显示）   | `hover`                     |
-| `hoverShowDes.maxFileSizeKB`| 处理文件的最大大小（KB）   | `1000`                      |
+| `hoverShowDes.showInlineText` | 是否在国际化标记后直接显示对应文案 | `true`                |
 
 ## 命令
 

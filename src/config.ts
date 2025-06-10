@@ -11,6 +11,9 @@ class Config {
     // 国际化文件路径
     private _i18nFilePath: string = '';
     
+    // 是否显示行内文本
+    private _showInlineText: boolean = true;
+    
     // 构造函数
     constructor() {
         this.loadConfig();
@@ -21,6 +24,7 @@ class Config {
         const config = vscode.workspace.getConfiguration('hoverShowDes');
         this._enabled = config.get<boolean>('enabled', true);
         this._i18nFilePath = config.get<string>('i18nFilePath', '');
+        this._showInlineText = config.get<boolean>('showInlineText', true);
     }
     
     // 保存配置
@@ -28,6 +32,7 @@ class Config {
         const config = vscode.workspace.getConfiguration('hoverShowDes');
         config.update('enabled', this._enabled, true);
         config.update('i18nFilePath', this._i18nFilePath, true);
+        config.update('showInlineText', this._showInlineText, true);
     }
     
     // enabled属性
@@ -47,6 +52,16 @@ class Config {
     
     set i18nFilePath(value: string) {
         this._i18nFilePath = value;
+        this.saveConfig();
+    }
+    
+    // showInlineText属性
+    get showInlineText(): boolean {
+        return this._showInlineText;
+    }
+    
+    set showInlineText(value: boolean) {
+        this._showInlineText = value;
         this.saveConfig();
     }
 }

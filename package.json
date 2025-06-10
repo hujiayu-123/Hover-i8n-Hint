@@ -45,6 +45,10 @@
       {
         "command": "hoverShowDes.toggle",
         "title": "切换国际化提示"
+      },
+      {
+        "command": "hoverShowDes.toggleInline",
+        "title": "切换行内文本显示"
       }
     ],
     "configuration": {
@@ -60,11 +64,10 @@
           "default": "",
           "description": "国际化资源文件路径，相对于工作区根目录"
         },
-        "hoverShowDes.displayMode": {
-          "type": "string",
-          "enum": ["hover", "inline", "both"],
-          "default": "hover",
-          "description": "提示显示模式：hover=鼠标悬停时显示，inline=行内显示，both=两者都启用"
+        "hoverShowDes.showInlineText": {
+          "type": "boolean",
+          "default": true,
+          "description": "是否在国际化标记后直接显示对应文案"
         }
       }
     },
