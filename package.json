@@ -2,7 +2,7 @@
   "name": "hover-i18n-hint",
   "displayName": "Hover I18n Hint - 国际化提示",
   "description": "在代码编辑器中悬停在国际化 key 上时显示对应的中文文案，支持多语言和多种格式，提高开发效率。",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "publisher": "HoverI18nHint",
   "engines": {
     "vscode": ">=1.70.0"

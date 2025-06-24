@@ -150,12 +150,92 @@
 2. 执行 `HoverShowDes: 刷新国际化资源` 命令手动刷新
 3. 确保修改的zh.js文件是插件正在使用的那个（可以查看输出面板中的日志确认）
 
+## 开发者指南
+
+如果你想参与这个项目的开发或自行构建插件，以下是相关命令和指南。
+
+### 开发环境搭建
+
+1. 克隆仓库
+   ```bash
+   git clone https://github.com/hujiayu-123/Hover-i8n-Hint.git
+   cd Hover-i8n-Hint
+   ```
+
+2. 安装依赖
+   ```bash
+   npm install
+   ```
+
+### 编译命令
+
+开发过程中，你可以使用以下命令编译代码：
+
+```bash
+# 编译一次
+npm run compile
+
+# 监听文件变化并自动编译
+npm run watch
+```
+
+### 调试
+
+在 VS Code 中打开项目，按下 F5 键启动调试会话，这将在新的扩展开发主机窗口中运行插件。
+
+### 测试
+
+运行测试用例：
+
+```bash
+npm run test
+```
+
+### 打包和发布
+
+1. 打包 VSIX 文件
+
+   首先确保版本号已更新（package.json 中的 version 字段）。
+
+   ```bash
+   # 安装 vsce 工具（如果尚未安装）
+   npm install -g @vscode/vsce
+
+   # 打包
+   vsce package
+   ```
+
+   这会在当前目录生成一个 `.vsix` 文件。
+
+2. 发布到 VS Code 扩展市场
+
+   ```bash
+   # 登录（首次使用需要创建个人访问令牌）
+   vsce login HoverI18nHint
+
+   # 发布
+   vsce publish
+   ```
+
+   或者直接通过版本号发布：
+
+   ```bash
+   # 发布补丁版本（增加第三位版本号）
+   vsce publish patch
+
+   # 发布次要版本（增加第二位版本号）
+   vsce publish minor
+
+   # 发布主要版本（增加第一位版本号）
+   vsce publish major
+   ```
+
 ## 反馈与贡献
 
 欢迎提交问题和建议，或者参与项目开发：
 
-- [提交 Issue](https://github.com/yourusername/hover-i18n-hint/issues)
-- [贡献代码](https://github.com/yourusername/hover-i18n-hint/pulls)
+- [提交 Issue](https://github.com/hujiayu-123/Hover-i8n-Hint/issues)
+- [贡献代码](https://github.com/hujiayu-123/Hover-i8n-Hint/pulls)
 
 ## 许可证
 

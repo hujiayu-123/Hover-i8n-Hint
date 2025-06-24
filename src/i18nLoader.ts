@@ -5,18 +5,6 @@ import { I18nMap } from './types';
 import * as os from 'os';
 import { config, findLocaleFiles } from './config';
 
-// 内置的示例国际化数据（用于测试或无工作区时）
-const DEFAULT_I18N_DATA: I18nMap = {
-  l0359: '检验检查',
-  l0360: '化验单',
-  l1001: '患者信息',
-  l1002: '诊断报告',
-  l1003: '医嘱',
-  l1004: '处方',
-  l1005: '手术记录',
-  l1006: '随访计划'
-};
-
 // 缓存的资源数据
 let cachedResources: Record<string, string> | null = null;
 
@@ -360,8 +348,8 @@ export async function loadI18nResources(forceReload: boolean = false): Promise<R
     return cachedResources;
   }
 
-  // 初始结果，使用内置数据
-  let resources: Record<string, string> = { ...DEFAULT_I18N_DATA };
+  // 初始结果为空对象
+  let resources: Record<string, string> = {};
   
   try {
     // 优先查找和加载zh.js文件
@@ -528,26 +516,10 @@ export async function loadI18nResource(relativePath: string): Promise<I18nMap> {
     // 查找所有工作区中的资源文件
     const resourceFiles = findResourceFiles(relativePath);
     
-    // 尝试查找插件自身的测试样例文件
+    // 如果找不到资源文件，返回空对象
     if (resourceFiles.length === 0) {
-      try {
-        const extensionPath = vscode.extensions.getExtension('hover-i18n-hint')?.extensionUri.fsPath;
-        if (extensionPath) {
-          const samplePath = path.join(extensionPath, 'test', 'sample', 'zh.js');
-          if (fs.existsSync(samplePath)) {
-            log(`未找到工作区资源文件，尝试使用插件测试样例: ${samplePath}`);
-            resourceFiles.push(samplePath);
-          }
-        }
-      } catch (err) {
-        log(`查找插件样例文件时出错: ${err}`, true);
-      }
-    }
-    
-    // 如果找不到资源文件，使用默认数据
-    if (resourceFiles.length === 0) {
-      log(`未找到任何资源文件: ${relativePath}，使用内置数据`);
-      return resolve(DEFAULT_I18N_DATA);
+      log(`未找到任何资源文件: ${relativePath}，返回空对象`);
+      return resolve({});
     }
     
     // 尝试读取找到的第一个资源文件
@@ -557,8 +529,8 @@ export async function loadI18nResource(relativePath: string): Promise<I18nMap> {
     // 读取并解析文件
     fs.readFile(fullPath, 'utf-8', (err, content) => {
       if (err) {
-        log(`读取资源文件失败: ${err.message}，使用内置数据`, true);
-        return resolve(DEFAULT_I18N_DATA);
+        log(`读取资源文件失败: ${err.message}，返回空对象`, true);
+        return resolve({});
       }
       
       // 从文件内容中提取国际化数据
@@ -570,9 +542,9 @@ export async function loadI18nResource(relativePath: string): Promise<I18nMap> {
         return resolve(extractedData);
       }
       
-      // 如果提取失败，使用默认数据
-      log('从文件中提取数据失败，使用内置数据');
-      resolve(DEFAULT_I18N_DATA);
+      // 如果提取失败，返回空对象
+      log('从文件中提取数据失败，返回空对象');
+      resolve({});
     });
   });
 }
