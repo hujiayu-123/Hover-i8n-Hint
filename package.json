@@ -2,7 +2,7 @@
   "name": "hover-i18n-hint",
   "displayName": "Hover I18n Hint - 国际化提示",
   "description": "在代码编辑器中悬停在国际化 key 上时显示对应的中文文案，支持多语言和多种格式，提高开发效率。",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "publisher": "HoverI18nHint",
   "engines": {
     "vscode": ">=1.70.0"
@@ -39,32 +39,32 @@
   "contributes": {
     "commands": [
       {
-        "command": "hoverShowDes.refresh",
+        "command": "hoverI18nHint.refresh",
         "title": "刷新国际化资源"
       },
       {
-        "command": "hoverShowDes.toggle",
+        "command": "hoverI18nHint.toggle",
         "title": "切换国际化提示"
       },
       {
-        "command": "hoverShowDes.toggleInline",
+        "command": "hoverI18nHint.toggleInline",
         "title": "切换行内文本显示"
       }
     ],
     "configuration": {
-      "title": "HoverShowDes",
+      "title": "Hover I18n Hint",
       "properties": {
-        "hoverShowDes.enabled": {
+        "hoverI18nHint.enabled": {
           "type": "boolean",
           "default": true,
           "description": "是否启用国际化提示"
         },
-        "hoverShowDes.i18nFilePath": {
+        "hoverI18nHint.i18nFilePath": {
           "type": "string",
           "default": "",
           "description": "国际化资源文件路径，相对于工作区根目录"
         },
-        "hoverShowDes.showInlineText": {
+        "hoverI18nHint.showInlineText": {
           "type": "boolean",
           "default": true,
           "description": "是否在国际化标记后直接显示对应文案"

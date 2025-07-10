@@ -26,6 +26,15 @@
 3. 搜索 "Hover I18n Hint"
 4. 点击 "安装" 按钮
 
+### 从 OpenVSX 安装
+
+1. 在支持 OpenVSX 的编辑器中（如 VS Code、Theia、Codium 等）
+2. 打开扩展面板
+3. 搜索 "Hover I18n Hint" 或 "hover-i18n-hint"
+4. 点击安装
+
+或者访问：https://open-vsx.org/extension/HoverI18nHint/hover-i18n-hint
+
 ### 从 VSIX 文件安装
 
 1. 下载最新的 `.vsix` 文件
@@ -109,16 +118,16 @@
 
 | 配置项                      | 说明                         | 默认值                      |
 |----------------------------|-----------------------------|-----------------------------|
-| `hoverShowDes.i18nFilePath` | 国际化资源文件路径（相对于工作区或绝对路径） | `app/iframe/locale/zh.js`  |
-| `hoverShowDes.enabled`     | 启用/禁用国际化提示          | `true`                      |
-| `hoverShowDes.showInlineText` | 是否在国际化标记后直接显示对应文案 | `true`                |
+| `hoverI18nHint.i18nFilePath` | 国际化资源文件路径（相对于工作区或绝对路径） | `app/iframe/locale/zh.js`  |
+| `hoverI18nHint.enabled`     | 启用/禁用国际化提示          | `true`                      |
+| `hoverI18nHint.showInlineText` | 是否在国际化标记后直接显示对应文案 | `true`                |
 
 ## 命令
 
 可以通过命令面板（`Ctrl+Shift+P` 或 `Cmd+Shift+P`）执行以下命令：
 
-- `HoverShowDes: 刷新国际化资源`：手动刷新国际化资源并更新提示
-- `HoverShowDes: 切换国际化提示`：启用/禁用提示功能
+- `HoverI18nHint: 刷新国际化资源`：手动刷新国际化资源并更新提示
+- `HoverI18nHint: 切换国际化提示`：启用/禁用提示功能
 
 ## 常见问题
 
@@ -128,7 +137,7 @@
 2. 确认当前文件类型是否受支持
 3. 尝试将鼠标精确地悬停在国际化key上（必须直接悬停在key文本上）
 4. 尝试手动指定国际化资源文件的绝对路径
-5. 执行 `HoverShowDes: 刷新国际化资源` 命令
+5. 执行 `HoverI18nHint: 刷新国际化资源` 命令
 6. 查看VSCode输出面板中的插件日志
 
 ### 识别到的 key 数量不正确
@@ -137,17 +146,12 @@
 2. 查看输出面板中的日志，确认资源文件是否被正确加载
 3. 可能需要调整正则表达式以匹配项目中使用的特定key格式
 
-### 为什么改用悬停方式显示？
-
-之前的行内装饰器方式在处理多个国际化key时容易出现文本重叠和错乱问题，特别是在大文件或复杂格式下。
-悬停显示方式更可靠，不会影响代码视图的整洁度，同时提供更好的性能和用户体验。
-
 ### 更新zh.js后提示没有更新
 
 当你更新zh.js文件后，插件会自动检测变化并重新加载资源。如果没有自动更新，你可以：
 
 1. 等待几秒钟，文件系统监听器有时会有短暂延迟
-2. 执行 `HoverShowDes: 刷新国际化资源` 命令手动刷新
+2. 执行 `HoverI18nHint: 刷新国际化资源` 命令手动刷新
 3. 确保修改的zh.js文件是插件正在使用的那个（可以查看输出面板中的日志确认）
 
 ## 开发者指南
@@ -201,6 +205,9 @@ npm run test
    # 安装 vsce 工具（如果尚未安装）
    npm install -g @vscode/vsce
 
+   # 编译项目
+   npm run compile
+
    # 打包
    vsce package
    ```
@@ -229,6 +236,38 @@ npm run test
    # 发布主要版本（增加第一位版本号）
    vsce publish major
    ```
+
+3. 发布到 OpenVSX
+
+   OpenVSX 是开源的扩展注册表，支持多种编辑器（VS Code、Theia、Codium 等）。
+
+   ```bash
+   # 安装 ovsx 工具（如果尚未安装）
+   npm install -g ovsx
+
+   # 首次发布需要创建 namespace（只需要执行一次）
+   ovsx create-namespace HoverI18nHint -p YOUR_ACCESS_TOKEN
+
+   # 发布到 OpenVSX
+   ovsx publish hover-i18n-hint-VERSION.vsix -p YOUR_ACCESS_TOKEN
+   ```
+
+   或者直接发布当前目录中的 VSIX 文件：
+
+   ```bash
+   # 发布最新的 VSIX 文件
+   ovsx publish -p YOUR_ACCESS_TOKEN
+   ```
+
+   **获取 OpenVSX Access Token：**
+   1. 访问 https://open-vsx.org/
+   2. 注册账号并登录
+   3. 在设置中生成 Access Token
+   4. 将 `YOUR_ACCESS_TOKEN` 替换为实际的 token
+
+   **扩展链接：**
+    - OpenVSX: https://open-vsx.org/extension/HoverI18nHint/hover-i18n-hint
+
 
 ## 反馈与贡献
 

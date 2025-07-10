@@ -176,6 +176,9 @@ function updateDecorations(editor: vscode.TextEditor) {
                     if (!addedPositions.has(posKey)) {
                         addedPositions.add(posKey);
                         
+                        // 直接使用原始值，不做任何处理
+                        // 完全保留原始内容，包括HTML标签和所有特殊字符
+                        
                         // 创建装饰器选项
                         const decoration: vscode.DecorationOptions = {
                             range: new vscode.Range(
@@ -284,7 +287,9 @@ function registerHoverProvider() {
                             // 创建更明显的提示
                             const hoverContent = new vscode.MarkdownString();
                             hoverContent.isTrusted = true;
-                            hoverContent.appendMarkdown(`### 国际化提示\n\n**${key}**: ${value}`);
+                            
+                            // 使用代码块格式显示内容，保留原始格式并避免Markdown解析问题
+                            hoverContent.appendMarkdown(`### 国际化提示\n\n**${key}**:\n\`\`\`\n${value}\n\`\`\``);
                             
                             return new vscode.Hover(hoverContent);
                         }

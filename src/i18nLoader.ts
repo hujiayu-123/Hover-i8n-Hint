@@ -66,77 +66,51 @@ function findResourceFiles(relativePath: string): string[] {
 
 // 从文件内容中提取国际化数据的不同方法
 function extractI18nDataFromContent(content: string): I18nMap {
-  log('尝试解析国际化资源文件...');
-  
-  // 记录文件内容的前 200 个字符，帮助调试
-  log(`文件内容前 200 个字符: ${content.substring(0, 200)}`);
-  
-  let result: I18nMap = {};
+  const result: I18nMap = {};
   
   try {
-    // 方法 1: 尝试匹配 const R = {...} 模式
-    log('尝试方法 1: 匹配 const R = {...} 模式');
-    const rObjectMatch = content.match(/const\s+R\s*=\s*({[^;]*})/);
-    if (rObjectMatch && rObjectMatch[1]) {
-      try {
-        // 使用 eval 解析对象（仅用于测试环境）
-        const parsed = eval('(' + rObjectMatch[1] + ')');
-        if (parsed && typeof parsed === 'object') {
-          log(`方法 1 成功解析，找到 ${Object.keys(parsed).length} 个条目`);
-          
-          // 输出前 5 个条目作为示例
-          const keys = Object.keys(parsed).slice(0, 5);
-          keys.forEach(key => {
-            log(`- ${key}: ${parsed[key]}`);
-          });
-          
-          return parsed;
-        }
-      } catch (evalErr) {
-        log(`方法 1 解析失败: ${evalErr}`, true);
-      }
-    }
+    // 尝试方法 1: 匹配导出对象格式 (export default {...})
+    log('尝试方法 1: 匹配 export default {...} 格式');
+    const exportDefaultMatch = content.match(/export\s+default\s*({[\s\S]*?}(?=;|\s*\/\/|\s*\/\*|\s*$))/);
     
-    // 方法 2: 尝试匹配 export default {...} 模式
-    log('尝试方法 2: 匹配 export default {...} 模式');
-    // 改进正则表达式，处理多行 export default 情况
-    const exportDefaultRegex = /export\s+default\s*({[\s\S]*?}(?=;|\s*\/\/|\s*\/\*|\s*$))/;
-    const exportDefaultMatch = content.match(exportDefaultRegex);
     if (exportDefaultMatch && exportDefaultMatch[1]) {
       try {
-        // 清理代码，处理可能的注释
-        let cleanCode = exportDefaultMatch[1].replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
-        const parsed = eval('(' + cleanCode + ')');
-        if (parsed && typeof parsed === 'object') {
-          log(`方法 2 成功解析，找到 ${Object.keys(parsed).length} 个条目`);
-          
-          // 输出前 5 个条目作为示例
-          const keys = Object.keys(parsed).slice(0, 5);
-          keys.forEach(key => {
-            log(`- ${key}: ${parsed[key]}`);
-          });
-          
-          return parsed;
+        // 将键值对提取为对象
+        const keyValuePairs = extractKeyValuePairsAdvanced(exportDefaultMatch[1]);
+        if (Object.keys(keyValuePairs).length > 0) {
+          log(`方法 1 成功解析，找到 ${Object.keys(keyValuePairs).length} 个条目`);
+          return keyValuePairs;
         }
-      } catch (evalErr) {
-        log(`方法 2 解析失败: ${evalErr}`, true);
+      } catch (err) {
+        log(`方法 1 解析失败: ${err}`, true);
       }
     }
     
-    // 方法 3: 尝试匹配 module.exports = {...} 模式
-    log('尝试方法 3: 匹配 module.exports = {...} 模式');
-    const moduleExportsMatch = content.match(/module\.exports\s*=\s*({[\s\S]*?}(?=;|\s*\/\/|\s*\/\*|\s*$))/);
-    if (moduleExportsMatch && moduleExportsMatch[1]) {
-      try {
-        let cleanCode = moduleExportsMatch[1].replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
-        const parsed = eval('(' + cleanCode + ')');
-        if (parsed && typeof parsed === 'object') {
-          log(`方法 3 成功解析，找到 ${Object.keys(parsed).length} 个条目`);
-          return parsed;
+    // 方法 2: 尝试解析 IIFE 模式
+    log('尝试方法 2: 解析 IIFE 模式');
+    const rObjectMatches = content.match(/R\s*:\s*({[\s\S]*?})(?=\s*[,}])/g);
+    
+    if (rObjectMatches && rObjectMatches.length > 0) {
+      for (const match of rObjectMatches) {
+        const objectContent = match.replace(/^R\s*:\s*/, '');
+        try {
+          const keyValuePairs = extractKeyValuePairsAdvanced(objectContent);
+          if (Object.keys(keyValuePairs).length > 0) {
+            log(`方法 2 成功解析，找到 ${Object.keys(keyValuePairs).length} 个条目`);
+            return keyValuePairs;
+          }
+        } catch (err) {
+          log(`尝试解析 R 对象内容失败: ${err}`, true);
         }
-      } catch (evalErr) {
-        log(`方法 3 解析失败: ${evalErr}`, true);
       }
+    }
+    
+    // 方法 3: 尝试提取所有可能的键值对
+    log('尝试方法 3: 直接提取所有可能的键值对');
+    const allKeyValuePairs = extractAllKeyValuePairs(content);
+    if (Object.keys(allKeyValuePairs).length > 0) {
+      log(`方法 3 成功提取 ${Object.keys(allKeyValuePairs).length} 个条目`);
+      return allKeyValuePairs;
     }
     
     // 方法 4: 直接尝试解析整个文件作为 JavaScript 对象
@@ -336,6 +310,85 @@ function extractI18nDataFromContent(content: string): I18nMap {
   
   log('所有解析方法都失败，返回空结果');
   return {};
+}
+
+/**
+ * 提取对象文本中的键值对，改进版本能处理引号和特殊字符
+ * @param objectText 对象文本内容
+ */
+function extractKeyValuePairsAdvanced(objectText: string): I18nMap {
+  const result: I18nMap = {};
+  
+  try {
+    // 首先尝试通过JSON解析（需要先清理代码）
+    let cleanedText = objectText
+      .replace(/\/\/.*$/gm, '') // 删除单行注释
+      .replace(/\/\*[\s\S]*?\*\//g, '') // 删除多行注释
+      .replace(/,(\s*[}\]])/g, '$1') // 删除尾随逗号
+      .replace(/([{,]\s*)(['"]?)([a-zA-Z0-9_$]+)(['"]?)(\s*:)/g, '$1"$3"$5'); // 确保所有键都有引号
+      
+    try {
+      // 尝试解析为JSON
+      const parsed = JSON.parse(`{${cleanedText}}`);
+      
+      // 提取符合国际化键格式的条目
+      for (const key in parsed) {
+        if (key.match(/^[lL]\d{4,}$/) && typeof parsed[key] === 'string') {
+          result[key] = parsed[key];
+        }
+      }
+    } catch (jsonError) {
+      log(`JSON解析失败，尝试使用正则表达式提取: ${jsonError}`);
+      
+      // 备选方案：使用正则表达式提取键值对
+      // 匹配形式如 'l1234': '这是文本，包含"引号"和<标签>'
+      // 或 "l1234": "这是文本"
+      const pattern = /(['"]?)([lL]\d{4,})\1\s*:\s*(['"])((?:\\\3|(?:(?!\3).))*)(?=\3)/g;
+      let match;
+      
+      while ((match = pattern.exec(objectText)) !== null) {
+        const key = match[2];
+        let value = match[4];
+        
+        // 处理转义的引号
+        value = value.replace(/\\(['"])/g, '$1');
+        
+        result[key] = value;
+      }
+    }
+  } catch (e) {
+    log(`提取键值对失败: ${e}`, true);
+  }
+  
+  return result;
+}
+
+/**
+ * 直接从文本中提取所有可能的国际化键值对
+ */
+function extractAllKeyValuePairs(content: string): I18nMap {
+  const result: I18nMap = {};
+  
+  try {
+    // 更强大的正则表达式，能处理各种引号情况和转义字符
+    // 这个正则表达式的关键是捕获组4，它使用了非贪婪匹配并处理转义引号
+    const regex = /(['"])([lL]\d{4,})\1\s*:\s*(['"])((?:\\\3|(?:(?!\3).))*)(?=\3)/g;
+    let match;
+    
+    while ((match = regex.exec(content)) !== null) {
+      const key = match[2];
+      let value = match[4];
+      
+      // 处理转义字符
+      value = value.replace(/\\(['"])/g, '$1');
+      
+      result[key] = value;
+    }
+  } catch (e) {
+    log(`提取所有键值对失败: ${e}`, true);
+  }
+  
+  return result;
 }
 
 /**
