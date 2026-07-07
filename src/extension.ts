@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { loadI18nResources } from './i18nLoader';
-import { config } from './config';
+import { config, isZhLocaleFile, ZH_LOCALE_FILE_PATTERN } from './config';
 import * as path from 'path';
 
 let i18nResources: Record<string, string> = {};
@@ -128,10 +128,9 @@ function updateDecorations(editor: vscode.TextEditor) {
         return;
     }
     
-    // 判断是否在zh.js文件中
-    const fileName = editor.document.fileName.toLowerCase();
-    if (fileName.endsWith('zh.js')) {
-        // 在zh.js文件中不显示装饰器
+    // 判断是否在中文国际化资源文件中
+    if (isZhLocaleFile(editor.document.fileName)) {
+        // 在 zh*.js 资源文件中不显示装饰器
         editor.setDecorations(decorationType, []);
         return;
     }
@@ -213,8 +212,8 @@ function setupFileWatcher(context: vscode.ExtensionContext) {
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (!workspaceFolders) return;
     
-    // 修改为监听所有语言资源文件
-    fileWatcher = vscode.workspace.createFileSystemWatcher('**/*{zh,en}.js');
+    // 监听所有中文资源文件（zh.js、zh.llm.js 等）
+    fileWatcher = vscode.workspace.createFileSystemWatcher(ZH_LOCALE_FILE_PATTERN);
     
     // 当文件变化时重新加载资源
     fileWatcher.onDidChange(async (uri) => {
@@ -263,10 +262,9 @@ function registerHoverProvider() {
                 // 获取当前行文本
                 const line = document.lineAt(position.line).text;
                 
-                // 检查文件名，如果是zh.js则不显示提示
-                const fileName = document.fileName.toLowerCase();
-                if (fileName.endsWith('zh.js')) {
-                    return null; // 在zh.js文件中不显示提示
+                // 在中文国际化资源文件中不显示提示
+                if (isZhLocaleFile(document.fileName)) {
+                    return null;
                 }
                 
                 // 查找这一行中所有可能的国际化key

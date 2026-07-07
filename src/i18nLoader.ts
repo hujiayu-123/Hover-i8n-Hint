@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { I18nMap } from './types';
 import * as os from 'os';
-import { config, findLocaleFiles } from './config';
+import { config, ZH_LOCALE_FILE_PATTERN, sortZhLocaleFiles } from './config';
 
 // 缓存的资源数据
 let cachedResources: Record<string, string> | null = null;
@@ -405,71 +405,60 @@ export async function loadI18nResources(forceReload: boolean = false): Promise<R
   let resources: Record<string, string> = {};
   
   try {
-    // 优先查找和加载zh.js文件
-    log('优先查找zh.js文件');
-    const zhFiles = await vscode.workspace.findFiles('**/zh.js', '**/node_modules/**', 10);
-    log(`全局搜索找到 ${zhFiles.length} 个zh.js文件`);
-    
-    // 尝试从找到的zh.js文件中加载数据
-    for (const file of zhFiles) {
-      try {
-        log(`尝试加载中文资源文件: ${file.fsPath}`);
-        const data = await loadI18nResource(file.fsPath);
-        if (Object.keys(data).length > 0) {
-          log(`成功从 ${file.fsPath} 加载 ${Object.keys(data).length} 个中文条目`);
-          resources = { ...resources, ...data };
-        }
-      } catch (error) {
-        log(`加载中文资源文件 ${file.fsPath} 失败: ${error}`, true);
-      }
+    const filesToLoad = new Set<string>();
+
+    // 查找并加载所有 zh*.js 文件（如 zh.js、zh.llm.js）
+    log(`优先查找中文资源文件: ${ZH_LOCALE_FILE_PATTERN}`);
+    const zhFiles = await vscode.workspace.findFiles(ZH_LOCALE_FILE_PATTERN, '**/node_modules/**', 50);
+    log(`全局搜索找到 ${zhFiles.length} 个中文资源文件`);
+    for (const file of sortZhLocaleFiles(zhFiles.map(f => f.fsPath))) {
+      filesToLoad.add(file);
     }
-    
+
     // 检查配置的文件路径
     if (config.i18nFilePath) {
-      log(`尝试从配置的路径加载资源: ${config.i18nFilePath}`);
-      try {
-        const data = await loadI18nResource(config.i18nFilePath);
-        if (Object.keys(data).length > 0) {
-          log(`从配置的路径成功加载 ${Object.keys(data).length} 个国际化条目`);
-          resources = { ...resources, ...data };
-        }
-      } catch (error) {
-        log(`从配置的路径加载失败: ${error}`, true);
+      filesToLoad.add(config.i18nFilePath);
+    }
+
+    // 尝试查找标准 locale 目录下的 zh*.js
+    const standardLocaleDirs = [
+      'app/iframe/locale',
+      'src/locale',
+      'locale',
+      'src/i18n',
+      'i18n',
+      'src/locales',
+      'locales',
+      'public/locales',
+      'public/i18n',
+      'assets/locales',
+      'assets/i18n',
+      'app/component/locales',
+      'app/component/i18n',
+      'component/locales',
+      'component/i18n',
+      'app/i18n',
+      'app/locale',
+      'app/locales'
+    ];
+
+    for (const dir of standardLocaleDirs) {
+      const dirFiles = await vscode.workspace.findFiles(`${dir}/zh*.js`, '**/node_modules/**', 10);
+      for (const file of dirFiles) {
+        filesToLoad.add(file.fsPath);
       }
     }
-    
-    // 尝试查找标准的zh.js路径
-    const standardZhPaths = [
-      'app/iframe/locale/zh.js',
-      'src/locale/zh.js',
-      'locale/zh.js',
-      'src/i18n/zh.js',
-      'i18n/zh.js',
-      'src/locales/zh.js',
-      'locales/zh.js',
-      'public/locales/zh.js',
-      'public/i18n/zh.js',
-      'assets/locales/zh.js',
-      'assets/i18n/zh.js',
-      'app/component/locales/zh.js',
-      'app/component/i18n/zh.js',
-      'component/locales/zh.js',
-      'component/i18n/zh.js',
-      'app/i18n/zh.js',
-      'app/locale/zh.js',
-      'app/locales/zh.js'
-    ];
-    
-    for (const relativePath of standardZhPaths) {
+
+    for (const filePath of sortZhLocaleFiles([...filesToLoad])) {
       try {
-        log(`尝试标准中文路径: ${relativePath}`);
-        const data = await loadI18nResource(relativePath);
+        log(`尝试加载中文资源文件: ${filePath}`);
+        const data = await loadI18nResource(filePath);
         if (Object.keys(data).length > 0) {
-          log(`成功从标准中文路径 ${relativePath} 加载 ${Object.keys(data).length} 个条目`);
+          log(`成功从 ${filePath} 加载 ${Object.keys(data).length} 个中文条目`);
           resources = { ...resources, ...data };
         }
       } catch (error) {
-        // 忽略错误，继续尝试下一个路径
+        log(`加载中文资源文件 ${filePath} 失败: ${error}`, true);
       }
     }
     

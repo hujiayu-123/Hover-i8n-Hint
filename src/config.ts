@@ -69,6 +69,26 @@ class Config {
 // 导出单例
 export const config = new Config();
 
+/** 中文国际化资源文件的 glob 匹配模式（如 zh.js、zh.llm.js） */
+export const ZH_LOCALE_FILE_PATTERN = '**/zh*.js';
+
+/** 判断文件是否为中文国际化资源文件 */
+export function isZhLocaleFile(filePath: string): boolean {
+  const baseName = path.basename(filePath).toLowerCase();
+  return /^zh.*\.js$/.test(baseName);
+}
+
+/** 排序中文资源文件：zh.js 优先，其余按文件名排序 */
+export function sortZhLocaleFiles(files: string[]): string[] {
+  return [...files].sort((a, b) => {
+    const nameA = path.basename(a).toLowerCase();
+    const nameB = path.basename(b).toLowerCase();
+    if (nameA === 'zh.js') return -1;
+    if (nameB === 'zh.js') return 1;
+    return nameA.localeCompare(nameB);
+  });
+}
+
 export function getConfig() {
   const config = vscode.workspace.getConfiguration('hoverI18nHint');
   return {
@@ -88,27 +108,24 @@ export async function findLocaleFiles(): Promise<string[]> {
   
   const results: string[] = [];
   const patterns = [
-    '**/locale/zh.js',
-    '**/locale/zh_CN.js',
-    '**/locales/zh.js',
-    '**/locales/zh_CN.js',
-    '**/i18n/zh.js',
-    '**/i18n/zh_CN.js',
-    '**/translations/zh.js',
-    '**/lang/zh.js',
-    '**/test/sample/zh.js',
-    'test/sample/zh.js',
-    '**/zh.js',
-    '**/static/zh.js',
-    '**/assets/zh.js',
-    '**/js/zh.js',
-    '**/src/zh.js',
-    '**/public/zh.js',
-    '**/resources/zh.js',
-    '**/language/zh.js',
-    '**/languages/zh.js',
-    '**/app/zh.js',
-    '**/common/zh.js'
+    '**/locale/zh*.js',
+    '**/locales/zh*.js',
+    '**/i18n/zh*.js',
+    '**/translations/zh*.js',
+    '**/lang/zh*.js',
+    '**/test/sample/zh*.js',
+    'test/sample/zh*.js',
+    ZH_LOCALE_FILE_PATTERN,
+    '**/static/zh*.js',
+    '**/assets/zh*.js',
+    '**/js/zh*.js',
+    '**/src/zh*.js',
+    '**/public/zh*.js',
+    '**/resources/zh*.js',
+    '**/language/zh*.js',
+    '**/languages/zh*.js',
+    '**/app/zh*.js',
+    '**/common/zh*.js'
   ];
   
   try {
