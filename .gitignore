@@ -42,6 +42,7 @@ coverage/
 .DS_Store
 .env
 .env.local
+.env.publish
 .env.development.local
 .env.test.local
 .env.production.local

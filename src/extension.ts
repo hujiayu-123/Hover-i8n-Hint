@@ -355,6 +355,7 @@ function findI18nKeysInLine(line: string): Array<{key: string, start: number, en
             { regex: /:label=['"]?(l\d+)['"]?/g, group: 1 }, // :label="l1001"
             { regex: /tiplan=['"]?(l\d+)['"]?/g, group: 1 }, // tiplan="l1008"
             { regex: /lan=['"]?(l\d+)['"]?/g, group: 1 }, // lan="l1007"
+            { regex: /lan:\s*['"](l\d+)['"]/g, group: 1 }, // lan: 'l0579'
             { regex: /data-i18n=['"]?(l\d+)['"]?/g, group: 1 }, // data-i18n="l1001"
             { regex: /i18n-key=['"]?(l\d+)['"]?/g, group: 1 }, // i18n-key="l1001"
         ];
