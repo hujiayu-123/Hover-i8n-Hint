@@ -64,8 +64,88 @@ function findResourceFiles(relativePath: string): string[] {
   return results;
 }
 
+/**
+ * 从 startIndex 处的 '{' 起截取完整对象字面量。
+ * 字符串和注释里的花括号不参与层级计算，避免 {{remark}} 这类文案提前截断。
+ */
+function extractBalancedObject(content: string, startIndex: number): string | null {
+  if (content.charAt(startIndex) !== '{') {
+    return null;
+  }
+
+  let depth = 0;
+  let quote = '';
+  let escaped = false;
+
+  for (let i = startIndex; i < content.length; i++) {
+    const ch = content.charAt(i);
+
+    if (quote) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (ch === '\\') {
+        escaped = true;
+        continue;
+      }
+      if (ch === quote) {
+        quote = '';
+      }
+      continue;
+    }
+
+    if (ch === "'" || ch === '"') {
+      quote = ch;
+      continue;
+    }
+
+    if (ch === '/' && content.charAt(i + 1) === '/') {
+      const lineEnd = content.indexOf('\n', i);
+      i = lineEnd === -1 ? content.length : lineEnd;
+      continue;
+    }
+
+    if (ch === '/' && content.charAt(i + 1) === '*') {
+      const commentEnd = content.indexOf('*/', i + 2);
+      i = commentEnd === -1 ? content.length : commentEnd + 1;
+      continue;
+    }
+
+    if (ch === '{') {
+      depth++;
+    } else if (ch === '}') {
+      depth--;
+      if (depth === 0) {
+        return content.slice(startIndex, i + 1);
+      }
+    }
+  }
+
+  return null;
+}
+
+/** 找出内容里所有 R: { ... }，按字符串语义配对花括号。 */
+function findRObjectLiterals(content: string): string[] {
+  const results: string[] = [];
+  const re = /R\s*:\s*\{/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = re.exec(content)) !== null) {
+    const braceIndex = match.index + match[0].length - 1;
+    const objectLiteral = extractBalancedObject(content, braceIndex);
+    if (!objectLiteral) {
+      continue;
+    }
+    results.push(objectLiteral);
+    re.lastIndex = braceIndex + objectLiteral.length;
+  }
+
+  return results;
+}
+
 // 从文件内容中提取国际化数据的不同方法
-function extractI18nDataFromContent(content: string): I18nMap {
+export function extractI18nDataFromContent(content: string): I18nMap {
   const result: I18nMap = {};
   
   try {
@@ -88,11 +168,10 @@ function extractI18nDataFromContent(content: string): I18nMap {
     
     // 方法 2: 尝试解析 IIFE 模式
     log('尝试方法 2: 解析 IIFE 模式');
-    const rObjectMatches = content.match(/R\s*:\s*({[\s\S]*?})(?=\s*[,}])/g);
-    
-    if (rObjectMatches && rObjectMatches.length > 0) {
-      for (const match of rObjectMatches) {
-        const objectContent = match.replace(/^R\s*:\s*/, '');
+    const rObjectLiterals = findRObjectLiterals(content);
+
+    if (rObjectLiterals.length > 0) {
+      for (const objectContent of rObjectLiterals) {
         try {
           const keyValuePairs = extractKeyValuePairsAdvanced(objectContent);
           if (Object.keys(keyValuePairs).length > 0) {
@@ -224,34 +303,21 @@ function extractI18nDataFromContent(content: string): I18nMap {
         }
       }
       
-      // 如果上面的方法失败，使用正则表达式直接提取 R 对象中的键值对
+      // 如果上面的方法失败，按字符串语义截取完整 R 对象再提取键值对
       log('尝试方法 6 备选: 直接提取 R 对象中的键值对');
-      const rSectionRegex = /R\s*:\s*{([\s\S]*?)}\s*}/;
-      const rSectionMatch = content.match(rSectionRegex);
-      
-      if (rSectionMatch && rSectionMatch[1]) {
-        const rSection = rSectionMatch[1];
-        const i18nKeyValueRegex = /['"]([lL]\d{4,})['"]:\s*['"]([^'"]*)['"]/g;
-        let kvMatch;
-        const i18nData: I18nMap = {};
-        let entryCount = 0;
-        
-        while ((kvMatch = i18nKeyValueRegex.exec(rSection)) !== null) {
-          const key = kvMatch[1];
-          const value = kvMatch[2];
-          i18nData[key] = value;
-          entryCount++;
-        }
-        
+      const fallbackLiterals = findRObjectLiterals(content);
+      for (const objectLiteral of fallbackLiterals) {
+        const i18nData = extractAllKeyValuePairs(objectLiteral);
+        const entryCount = Object.keys(i18nData).length;
+
         if (entryCount > 0) {
           log(`方法 6 备选成功提取国际化数据，找到 ${entryCount} 个条目`);
-          
-          // 输出前 5 个条目作为示例
+
           const keys = Object.keys(i18nData).slice(0, 5);
           keys.forEach(key => {
             log(`- ${key}: ${i18nData[key]}`);
           });
-          
+
           return i18nData;
         }
       }

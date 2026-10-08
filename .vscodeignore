@@ -4,4 +4,6 @@ src/**
 .gitignore
 tsconfig.json
 **/*.map
-**/*.ts 
+**/*.ts
+.env.publish
+*.vsix 
